@@ -1,80 +1,117 @@
-﻿--Version 20220211 V1
+﻿--Version 2022-03-06 V2
 
 --<INICIO> INICIALIZACION VARIABLES
+BEGIN 
 PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 	
-	DROP TABLE #AxDB_BackupFiles
+	if OBJECT_ID('tempdb..#fileListTable') is not null
+		DROP TABLE #fileListTable
+	CREATE TABLE #fileListTable (
+		[LogicalName]           NVARCHAR(128),
+		[PhysicalName]          NVARCHAR(260),
+		[Type]                  CHAR(1),
+		[FileGroupName]         NVARCHAR(128),
+		[Size]                  NUMERIC(20,0),
+		[MaxSize]               NUMERIC(20,0),
+		[FileID]                BIGINT,
+		[CreateLSN]             NUMERIC(25,0),
+		[DropLSN]               NUMERIC(25,0),
+		[UniqueID]              UNIQUEIDENTIFIER,
+		[ReadOnlyLSN]           NUMERIC(25,0),
+		[ReadWriteLSN]          NUMERIC(25,0),
+		[BackupSizeInBytes]     BIGINT,
+		[SourceBlockSize]       INT,
+		[FileGroupID]           INT,
+		[LogGroupGUID]          UNIQUEIDENTIFIER,
+		[DifferentialBaseLSN]   NUMERIC(25,0),
+		[DifferentialBaseGUID]  UNIQUEIDENTIFIER,
+		[IsReadOnly]            BIT,
+		[IsPresent]             BIT,
+		[TDEThumbprint]         VARBINARY(32), -- remove this column if using SQL 2005
+		[SnapshotURL]           NVARCHAR(360) -- remove this column if using less than SQL 2016 (13.x)
+	)
+
+	if OBJECT_ID('tempdb..#AxDB_BackupFiles') is not null
+		DROP TABLE #AxDB_BackupFiles
 	CREATE TABLE #AxDB_BackupFiles
 		(
 			[VarName] VARCHAR(20) PRIMARY KEY,
-			[VarValue] VARCHAR(255)
+			[VarValue] VARCHAR(255),
+			[LogicalName] NVARCHAR(128),
 		)
-	GO
-
+		
 	--FechaHora formatedo a texto
 	declare @dateTime nvarchar(100) = replace(replace(replace(convert(varchar, getdate(), 20), '-', ''), ':', ''), ' ', '_')
 	declare @WorkFolder nvarchar(255)			= N'J:\MSSQL_BACKUP\AxDB_BackupRestoreTool\'
-
-	INSERT INTO #AxDB_BackupFiles SELECT 'BackupCurrentAxDB', @WorkFolder + HOST_NAME() + 'ExportImport_AxDBPrevStart_' + @dateTime + '.bak'
-	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToStageDB'	, @WorkFolder + HOST_NAME() + 'ExportImport_StagingAxDBImported_' + @dateTime + '.bak'
-
---<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
-----------------------------------------------------------------------------------------------
-	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToImport'	, @WorkFolder + 'FBM TST01 B1 1_AxDB_20220211_134629_MultiDisc.bak'
-----------------------------------------------------------------------------------------------
---<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
-
-	declare @aux nvarchar(255)
-	select @aux = VarValue from #AxDB_BackupFiles where VarName = 'BackupCurrentAxDB'
-	print @aux
-	select @aux = VarValue from #AxDB_BackupFiles where VarName = 'BackupToStageDB'
-	print @aux
-	select @aux = VarValue from #AxDB_BackupFiles where VarName = 'BackupToImport'
-	print @aux
 	
---<FIN> INICIALIZACION VARIABLES
---------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------
+	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
+	declare @BackupToImport NVARCHAR(128) = 'FBM-TEST01-B-1_AxDB_20220306_001910_PreProdImportada.bak'
+	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
+----------------------------------------------------------------------------------------------
+
+	INSERT INTO #fileListTable
+	EXEC('RESTORE FILELISTONLY FROM DISK = '''+ @WorkFolder + 'FBM-TEST01-B-1_AxDB_20220306_001910_PreProdImportada.bak' + '''')
+	
+	declare @LogicalName NVARCHAR(128)
+	SELECT @LogicalName = LogicalName FROM #fileListTable
+
+
+	INSERT INTO #AxDB_BackupFiles SELECT 'BackupCurrentAxDB', @WorkFolder + HOST_NAME() + '_' + @dateTime + '_ExportImport_AxDBPrevStart.bak', ''
+	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToStageDB'	, @WorkFolder + HOST_NAME() + '_' + @dateTime + '_ExportImport_StagingAxDBImported.bak', ''
+	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToImport', @WorkFolder + @BackupToImport, @LogicalName
+	
+	select * from #AxDB_BackupFiles 
+END
+GO
+
+--<INICIO> RESPALDO LA AxDB ACTUAL
+BEGIN
+PRINT '--- <RESPALDO LA AxDB ACTUAL - Inicio> ---'
+	
+	declare @BackupCurrentAxDB nvarchar(255)
+	select @BackupCurrentAxDB = VarValue from #AxDB_BackupFiles where VarName = 'BackupCurrentAxDB'
+
+	USE [master]
+	BACKUP DATABASE [AxDB] TO DISK = @BackupCurrentAxDB
+		WITH NOFORMAT, NOINIT, NAME = N'AxDB-Full Database Backup', SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+END
+GO
+
 --<INICIO> CREO AxDBOriginal SI NO EXISTE 
+BEGIN
 PRINT '--- <CREO AxDBOriginal SI NO EXISTE - Inicio> ---'
 
 	IF DB_ID('AxDBOriginal') IS NULL
 	BEGIN
 		declare @BackupToOriginal nvarchar(255)
 		select @BackupToOriginal = VarValue from #AxDB_BackupFiles where VarName = 'BackupCurrentAxDB' --USO la Current AxDB recien respaldada
-
-		ALTER DATABASE [AxDBOriginal] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
+		
+		TRUNCATE TABLE #fileListTable
+		INSERT INTO #fileListTable
+		EXEC('RESTORE FILELISTONLY FROM DISK = ''' + @BackupToOriginal + '''')
+		declare @LogicalNameData nvarchar(128) , @LogicalNameLog nvarchar(128) 
+		SELECT @LogicalNameData = LogicalName FROM #fileListTable WHERE [Type] = 'D'
+		SELECT @LogicalNameLog = LogicalName FROM #fileListTable WHERE [Type] = 'L'
 
 		USE [master]
-		RESTORE DATABASE [AxDBOriginal]
-		FROM  DISK = @BackupToOriginal
-		WITH  FILE = 1,  
-		MOVE N'AXDBBuild_Data' TO N'G:\MSSQL_DATA\AxDBOriginal.mdf', 
-		MOVE N'AXDBBuild_Log' TO N'H:\MSSQL_LOGS\AxDBOriginal_Log.ldf',  
-		NOUNLOAD,  
-		STATS = 5
-	
+		RESTORE DATABASE [AxDBOriginal] FROM DISK = @BackupToOriginal
+			WITH 
+				MOVE @LogicalNameData TO 'G:\MSSQL_DATA\AxDBOriginal.mdf',
+				MOVE @LogicalNameLog  TO 'H:\MSSQL_LOGS\AxDBOriginal_Log.ldf',
+				FILE = 1, NOUNLOAD, STATS = 5
+
 		ALTER DATABASE [AxDBOriginal] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
 	END
-	GO
---<FIN> CREO AxDBOriginal SI NO EXISTE 
---------------------------------------------------------------------------------------
---<INICIO> RESPALDO LA AxDB ACTUAL
-PRINT '--- <RESPALDO LA AxDB ACTUA - Inicio> ---'
-	
-	declare @BackupCurrentAxDB nvarchar(255)
-	select @BackupCurrentAxDB = VarValue from #AxDB_BackupFiles where VarName = 'BackupCurrentAxDB'
+END
+GO
 
-	USE [master]
-	BACKUP DATABASE [AxDB] TO  DISK = @BackupCurrentAxDB
-		WITH NOFORMAT, NOINIT,  NAME = N'AxDB-Full Database Backup', SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10
-
---<FIN> RESPALDO LA AxDB ACTUAL
---------------------------------------------------------------------------------------
---<INICIO> 
+--<INICIO> QUITO EL CHANGE TRACKING
+BEGIN
 PRINT '--- <QUITO EL CHANGE TRACKING - Inicio> ---'
 
 	USE AxDB
-	GO
+
 	-- Re-assign full rext catalogs to [dbo]
 	DECLARE @catalogName nvarchar(256);
 	DECLARE @sqlStmtTable nvarchar(512)
@@ -97,13 +134,13 @@ PRINT '--- <QUITO EL CHANGE TRACKING - Inicio> ---'
 	DEALLOCATE reassignFullTextCatalogCursor
 
 	--Disable change tracking on tables where it is enabled.
-	declare
-	@SQL varchar(1000)
+	declare @SQL varchar(1000)
 	set quoted_identifier off
 	declare changeTrackingCursor CURSOR for
-	select 'ALTER TABLE [' + t.name + '] DISABLE CHANGE_TRACKING'
-	from sys.change_tracking_tables c, sys.tables t
-	where t.object_id = c.object_id
+	select 'ALTER TABLE [AxDB].[' + s.name + '].[' + t.name + '] DISABLE CHANGE_TRACKING'
+	from sys.change_tracking_tables c 
+	inner join sys.tables t on t.object_id = c.object_id
+	inner join sys.schemas s on s.schema_id = t.schema_id
 	order by t.name
 	OPEN changeTrackingCursor
 	FETCH changeTrackingCursor into @SQL
@@ -120,85 +157,87 @@ PRINT '--- <QUITO EL CHANGE TRACKING - Inicio> ---'
 	-- SET THE NAME OF YOUR DATABASE BELOW
 	AxDB
 	set CHANGE_TRACKING = OFF
+END
+GO
 
---<FIN> QUITO EL CHANGE TRACKING
---------------------------------------------------------------------------------------
 --<INICIO> IMPORTAR LA DB EXTERNA
+BEGIN
 PRINT '--- <IMPORTAR LA DB EXTERNA - Inicio> ---'
 	
 	declare @BackupToImport nvarchar(255)
 	select @BackupToImport = VarValue from #AxDB_BackupFiles where VarName = 'BackupToImport' 
 	
-	ALTER DATABASE [AxDBOriginal] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
+	TRUNCATE TABLE #fileListTable
+	INSERT INTO #fileListTable
+	EXEC('RESTORE FILELISTONLY FROM DISK = ''' + @BackupToImport + '''')
+	declare @LogicalNameData nvarchar(128) , @LogicalNameLog nvarchar(128) 
+	SELECT @LogicalNameData = LogicalName FROM #fileListTable WHERE [Type] = 'D'
+	SELECT @LogicalNameLog = LogicalName FROM #fileListTable WHERE [Type] = 'L'
 
 	USE [master]
-	RESTORE DATABASE [AxDBImported]
-	FROM  DISK = @BackupToImport --ASEGURARSE DE HABER CAMBIADO EL NOMBRE DEL ARCHIVO
-	WITH  FILE = 1,  
-	MOVE N'AXDBBuild_Data' TO N'G:\MSSQL_DATA\AxDBImported.mdf', 
-	MOVE N'AXDBBuild_Log' TO N'H:\MSSQL_LOGS\AxDBImported_Log.ldf',  
-	NOUNLOAD,  
-	REPLACE,
-	STATS = 5
+	RESTORE DATABASE [AxDBImported] FROM  DISK = @BackupToImport --ASEGURARSE DE HABER CAMBIADO EL NOMBRE DEL ARCHIVO
+		WITH
+			MOVE @LogicalNameData TO 'G:\MSSQL_DATA\AxDBImported.mdf',
+			MOVE @LogicalNameLog  TO 'H:\MSSQL_LOGS\AxDBImported_Log.ldf',
+			FILE = 1, NOUNLOAD, REPLACE, STATS = 5
+END
+GO
 
-	GO
---<FIN> IMPORTAR LA DB EXTERNA
---------------------------------------------------------------------------------------
 --<INICIO> REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB
+BEGIN
 PRINT '--- <REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB - Inicio> ---'
 
 	--Remove the database level users from the database
 	--these will be recreated after importing in SQL Server.
-	use AxDBImported --******************* SET THE NEWLY RESTORED DATABASE NAME****************************
+	use [AxDBImported] --******************* SET THE NEWLY RESTORED DATABASE NAME****************************
 
-	declare
-	@userSQL varchar(1000)
+	declare @userSQL varchar(1000)
 	set quoted_identifier off
 	declare userCursor CURSOR for
-	select 'DROP USER [' + name + ']'
-	from sys.sysusers
-	where issqlrole = 0 and hasdbaccess = 1 and name <> 'dbo' and name <> 'NT AUTHORITY\NETWORK SERVICE'
-	OPEN userCursor
-	FETCH userCursor into @userSQL
-	WHILE @@Fetch_Status = 0
-	BEGIN
-	exec(@userSQL)
-	FETCH userCursor into @userSQL
-	END
+		select 'DROP USER [' + name + ']'
+		from sys.sysusers
+		where issqlrole = 0 and hasdbaccess = 1 and name <> 'dbo' and name <> 'NT AUTHORITY\NETWORK SERVICE'
+
+		OPEN userCursor
+		FETCH userCursor into @userSQL
+		WHILE @@Fetch_Status = 0
+		BEGIN
+			exec(@userSQL)
+			FETCH userCursor into @userSQL
+		END
 	CLOSE userCursor
 	DEALLOCATE userCursor
 
 	--now recreate the users copying from the existing database:
-	use AxDB --******************* SET THE OLD DATABASE NAME****************************
-	go
+	use [AxDB] --******************* SET THE OLD DATABASE NAME****************************
 	IF object_id('tempdb..#UsersToCreate') is not null
-	DROP TABLE #UsersToCreate
-	go
+		DROP TABLE #UsersToCreate
+	
 	select 'CREATE USER [' + name + '] FROM LOGIN [' + name + '] EXEC sp_addrolemember "db_owner", "' + name + '"' as sqlcommand
 	into #UsersToCreate
 	from sys.sysusers
 	where issqlrole = 0 and hasdbaccess = 1 and name != 'dbo' and name != 'NT AUTHORITY\NETWORK SERVICE'
-	go
-	use AxDBImported --******************* SET THE NEWLY RESTORED DATABASE NAME****************************
-	go
-	declare
-	@userSQL varchar(1000)
+	
+	use [AxDBImported] --******************* SET THE NEWLY RESTORED DATABASE NAME****************************
+	--declare @userSQL varchar(1000)
 	set quoted_identifier off
 	declare userCursor CURSOR for
-	select sqlcommand from #UsersToCreate
-	OPEN userCursor
-	FETCH userCursor into @userSQL
-	WHILE @@Fetch_Status = 0
-	BEGIN
-	exec(@userSQL)
-	FETCH userCursor into @userSQL
-	END
+		select sqlcommand from #UsersToCreate
+
+		OPEN userCursor
+		FETCH userCursor into @userSQL
+		WHILE @@Fetch_Status = 0
+		BEGIN
+			exec(@userSQL)
+			FETCH userCursor into @userSQL
+		END
 	CLOSE userCursor
 	DEALLOCATE userCursor
-	
---<FIN> REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB
---------------------------------------------------------------------------------------
+END
+GO
+
 --<INICIO> CORRIJO LAS URLS Y OTRAS CONFIGURACIONES DE RETAIL
+BEGIN
 PRINT 'CORRIJO LAS URLS Y OTRAS CONFIGURACIONES DE RETAIL - Inicio'
 	use AxDBImported
 	update AxDBImported.dbo.RETAILCONNDATABASEPROFILE set CONNECTIONSTRING = (select CONNECTIONSTRING from AxDB.dbo.RETAILCONNDATABASEPROFILE) --Original Database
@@ -219,15 +258,18 @@ PRINT 'CORRIJO LAS URLS Y OTRAS CONFIGURACIONES DE RETAIL - Inicio'
 	update  AxDBImported.ax.RetailTransactionServiceProfile 
 	set SERVICEHOSTURL = (select SERVICEHOSTURL from  AxDB.dbo.RetailTransactionServiceProfile) --Original Database
 		, AZURERESOURCE = (select AZURERESOURCE from  AxDB.dbo.RetailTransactionServiceProfile) --Original Database
+END
+GO
 
---<FIN> CORRIJO LAS URLS Y OTRAS CONFIGURACIONES DE RETAIL
---------------------------------------------------------------------------------------
 --<INICIO> FIN OFFLINE AxDB
+BEGIN
 PRINT 'PONGO LA [AxDB] En modo Offline - Inicio'
 	ALTER DATABASE [AxDB] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
---<FIN> FIN OFFLINE AxDB
---------------------------------------------------------------------------------------
+END
+GO
+
 --<INICIO> PREPARO LA DB IMPORTADA
+BEGIN
 PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	
 	USE [AxDBImported]
@@ -235,16 +277,16 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	--Remove certificates in database from Electronic Signature usage
 	DECLARE @SQLElectronicSig nvarchar(512)
 	DECLARE certCursor CURSOR for
-	select 'DROP CERTIFICATE ' + QUOTENAME(c.name) + ';'
-	from sys.certificates c;
-	OPEN certCursor;
-	FETCH certCursor into @SQLElectronicSig;
-	WHILE @@Fetch_Status = 0
-	BEGIN
-	print @SQLElectronicSig;
-	exec(@SQLElectronicSig);
-	FETCH certCursor into @SQLElectronicSig;
-	END;
+		select 'DROP CERTIFICATE ' + QUOTENAME(c.name) + ';'
+		from sys.certificates c;
+		OPEN certCursor;
+		FETCH certCursor into @SQLElectronicSig;
+		WHILE @@Fetch_Status = 0
+		BEGIN
+			print @SQLElectronicSig;
+			exec(@SQLElectronicSig);
+			FETCH certCursor into @SQLElectronicSig;
+		END;
 	CLOSE certCursor;
 	DEALLOCATE certCursor;
 
@@ -267,25 +309,27 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 				  EXEC sp_executesql @sqlStmtTable
 				  FETCH NEXT FROM reassignFullTextCatalogCursor INTO @catalogName
 		   END
-		   CLOSE reassignFullTextCatalogCursor
-		   DEALLOCATE reassignFullTextCatalogCursor
+		CLOSE reassignFullTextCatalogCursor
+		DEALLOCATE reassignFullTextCatalogCursor
 	END
 
+	USE [AxDBImported]
 	--Disable change tracking on tables where it is enabled.
-	declare
-	@SQL varchar(1000)
+	declare @SQL varchar(1000)
 	set quoted_identifier off
 	declare changeTrackingCursor CURSOR for
-	select 'ALTER TABLE [' + t.name + '] DISABLE CHANGE_TRACKING'
-	from sys.change_tracking_tables c, sys.tables t
-	where t.object_id = c.object_id
-	OPEN changeTrackingCursor
-	FETCH changeTrackingCursor into @SQL
-	WHILE @@Fetch_Status = 0
-	BEGIN
-	exec(@SQL)
-	FETCH changeTrackingCursor into @SQL
-	END
+		select 'ALTER TABLE [AxDBImported].[' + s.name + '].[' + t.name + '] DISABLE CHANGE_TRACKING'
+		from sys.change_tracking_tables c
+		inner join sys.tables t on t.object_id = c.object_id
+		inner join sys.schemas s on s.schema_id = t.schema_id
+
+		OPEN changeTrackingCursor
+		FETCH changeTrackingCursor into @SQL
+		WHILE @@Fetch_Status = 0
+		BEGIN
+			exec(@SQL)
+			FETCH changeTrackingCursor into @SQL
+		END
 	CLOSE changeTrackingCursor
 	DEALLOCATE changeTrackingCursor
 
@@ -302,7 +346,8 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	--Delete the SYSSQLRESOURCESTATSVIEW view as it has an Azure-specific definition in it.
 	--We will run db synch later to recreate the correct view for SQL Server.
 	if(1=(select 1 from sys.views where name = 'SYSSQLRESOURCESTATSVIEW'))
-	DROP VIEW SYSSQLRESOURCESTATSVIEW
+		DROP VIEW SYSSQLRESOURCESTATSVIEW
+
 	--Next, set system parameters ready for being a SQL Server Database.
 	update sysglobalconfiguration
 	set value = 'SQLSERVER'
@@ -324,11 +369,11 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	SET SMTPRELAYSERVERNAME = '', MAILERNONINTERACTIVE = 'SMTP' 
 	--Remove encrypted SMTP Password record(s)
 	TRUNCATE TABLE SYSEMAILSMTPPASSWORD
-	GO
-	UPDATE LogisticsElectronicAddress
-	SET LOCATOR = ''
-	WHERE Locator LIKE '%@%'
-	GO
+	
+	--UPDATE LogisticsElectronicAddress
+	--SET LOCATOR = ''
+	--WHERE Locator LIKE '%@%'
+	
 	TRUNCATE TABLE PrintMgmtSettings
 	TRUNCATE TABLE PrintMgmtDocInstance
 	
@@ -336,13 +381,14 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	UPDATE BatchJob
 	SET STATUS = 0
 	WHERE STATUS IN (1,2,5,7)
-	GO
 
 	-- Clear encrypted hardware profile merchand properties
 	update dbo.RETAILHARDWAREPROFILE set SECUREMERCHANTPROPERTIES = null where SECUREMERCHANTPROPERTIES is not null
---<FIN> PREPARO LA DB IMPORTADA
---------------------------------------------------------------------------------------
---<INICIO> 
+END
+GO
+
+--<INICIO> QUITO EL DUAL WRITE SETTINGS
+BEGIN 
 PRINT '--- <QUITO EL DUAL WRITE SETTINGS - Inicio> ---'
 
 	use AxDBImported --******************* SET THE NEWLY RESTORED DATABASE NAME****************************
@@ -366,58 +412,71 @@ PRINT '--- <QUITO EL DUAL WRITE SETTINGS - Inicio> ---'
 		BEGIN
 			--Limpiando solo esta tabla fue suficiente para evitar el error al crear/actualizar datos de clientes
 			--truncate table AxDB.dbo.DUALWRITEPROJECTCONFIGURATION
+			--SET @sqlStmtTable = 'SELECT * FROM dbo.[' + @tableName + ']' 
+			--EXEC sp_executesql @sqlStmtTable
 
-			SET @sqlStmtTable = 'TRUNCATE TABLE AxDB.dbo.[' + @tableName + ']' 
+			SET @sqlStmtTable = 'TRUNCATE TABLE dbo.[' + @tableName + ']' 
 			EXEC sp_executesql @sqlStmtTable
 			FETCH NEXT FROM selectFullTable INTO @tableName
 		END
 		CLOSE selectFullTable
 	DEALLOCATE selectFullTable
-	GO
---<FIN> QUITO EL DUAL WRITE SETTINGS
---------------------------------------------------------------------------------------
+END
+GO
+
 --<INICIO> EXPORTO LA AxDBImported EN LA QUE ESTUVIMOS TRABAJANDO
+BEGIN
 PRINT '--- <EXPORTO LA AxDBImported EN LA QUE ESTUVIMOS TRABAJANDO - Inicio> ---'
 
 	declare @BackupToStageDB nvarchar(255)
 	select @BackupToStageDB = VarValue from #AxDB_BackupFiles where VarName = 'BackupToStageDB'
 
 	USE [master]
-	BACKUP DATABASE [AxDBImported] TO  DISK = @BackupToStageDB
-		WITH NOFORMAT, NOINIT,  NAME = N'AxDBImported-Full Database Backup', SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+	BACKUP DATABASE [AxDBImported] TO DISK = @BackupToStageDB
+		WITH NOFORMAT, NOINIT, NAME = N'AxDBImported-Full Database Backup', SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10
 
 	ALTER DATABASE [AxDBImported] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
---<FIN> EXPORTO LA AxDBImported EN LA QUE ESTUVIMOS TRABAJANDO
---------------------------------------------------------------------------------------
+END
+GO
+
 --<INICIO> IMPORTO LA DB TRABAJADA COMO LA AxDB
+BEGIN
 PRINT '--- <IMPORTO LA DB TRABAJADA COMO LA AxDB - Inicio> ---'
 
-	ALTER DATABASE [AxDB] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
+	declare @BackupToStageDB nvarchar(255)
+	select @BackupToStageDB = VarValue from #AxDB_BackupFiles where VarName = 'BackupToStageDB'
+	
+	IF EXISTS (SELECT name FROM master.sys.databases WHERE name = N'AxDB' AND state_desc = 'ONLINE')
+		ALTER DATABASE [AxDB] SET OFFLINE WITH ROLLBACK AFTER 1 SECONDS
+	
+	TRUNCATE TABLE #fileListTable
+	INSERT INTO #fileListTable
+	EXEC('RESTORE FILELISTONLY FROM DISK = ''' + @BackupToStageDB + '''')
+	declare @LogicalNameData nvarchar(128) , @LogicalNameLog nvarchar(128) 
+	SELECT @LogicalNameData = LogicalName FROM #fileListTable WHERE [Type] = 'D'
+	SELECT @LogicalNameLog = LogicalName FROM #fileListTable WHERE [Type] = 'L'
 
 	USE [master]
-	RESTORE DATABASE [AxDB]
-	FROM  DISK = @BackupToStageDB
-	WITH  FILE = 1,  
-	MOVE N'AXDBBuild_Data' TO N'G:\MSSQL_DATA\AxDB.mdf', 
-	MOVE N'AXDBBuild_Log' TO N'H:\MSSQL_LOGS\AxDB.ldf',  
-	NOUNLOAD,  
-	REPLACE,
-	STATS = 5
+	RESTORE DATABASE [AxDB] FROM DISK = @BackupToStageDB
+	WITH 
+		MOVE @LogicalNameData TO 'G:\MSSQL_DATA\AxDB.mdf',
+		MOVE @LogicalNameLog TO 'G:\MSSQL_DATA\AxDB_Log.ldf',
+		FILE = 1, NOUNLOAD, REPLACE, STATS = 5
+END
+GO
 
-	GO
---<FIN> IMPORTO LA DB TRABAJADA COMO LA AxDB
---------------------------------------------------------------------------------------
 --<INICIO> HABILITO EL CHANGE TRACKING EN LA NUEVA DB
+BEGIN
 PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 
 	USE AxDB
 	
 	--Enable again the change tracking on the database itself.
 	ALTER DATABASE AxDB SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 6 DAYS, AUTO_CLEANUP = ON)
-	GO
+	
 	DROP PROCEDURE IF EXISTS SP_ConfigureTablesForChangeTracking
 	DROP PROCEDURE IF EXISTS SP_ConfigureTablesForChangeTracking_V2
-	GO
+	
 	-- Begin Refresh Retail FullText Catalogs
 	DECLARE @RFTXNAME NVARCHAR(MAX);
 	DECLARE @RFTXSQL NVARCHAR(MAX);
@@ -444,4 +503,5 @@ PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 	CLOSE retail_ftx;  
 	DEALLOCATE retail_ftx; 
 	-- End Refresh Retail FullText Catalogs
---<FIN> HABILITO EL CHANGE TRACKING EN LA NUEVA DB
+END
+GO
