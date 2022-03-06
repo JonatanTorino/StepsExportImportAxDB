@@ -1,0 +1,13 @@
+
+--CAMBIAR EL NOMBRE DEL ARCHIVO
+USE [master]
+RESTORE DATABASE [AxDBImported]
+FROM  DISK = N'J:\MSSQL_BACKUP\AxDB_BackupRestoreTool\FBM TST01 B1 1_AxDB_20211015_143850_AntesDemoSprint17.bak' 
+WITH  FILE = 1,  
+MOVE N'AXDBBuild_Data' TO N'G:\MSSQL_DATA\AxDBImported.mdf', 
+MOVE N'AXDBBuild_Log' TO N'H:\MSSQL_LOGS\AxDBImported_Log.ldf',  
+NOUNLOAD,  
+STATS = 5
+
+GO
+
