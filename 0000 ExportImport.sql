@@ -51,7 +51,7 @@ PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 ----------------------------------------------------------------------------------------------
 
 	INSERT INTO #fileListTable
-	EXEC('RESTORE FILELISTONLY FROM DISK = '''+ @WorkFolder + 'FBM-TEST01-B-1_AxDB_20220306_001910_PreProdImportada.bak' + '''')
+	EXEC('RESTORE FILELISTONLY FROM DISK = '''+ @WorkFolder + @BackupToImport + '''')
 	
 	declare @LogicalName NVARCHAR(128)
 	SELECT @LogicalName = LogicalName FROM #fileListTable
