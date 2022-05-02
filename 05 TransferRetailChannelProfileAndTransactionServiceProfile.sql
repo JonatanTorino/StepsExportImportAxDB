@@ -22,13 +22,18 @@ set SERVICEHOSTURL = (select SERVICEHOSTURL from  AxDBOriginal.dbo.RetailTransac
 
 --Queries
 /*
-select SERVICEHOSTURL,AZURERESOURCE, * from  AxDB.dbo.RetailTransactionServiceProfile
-select SERVICEHOSTURL,AZURERESOURCE, * from  AxDB.ax.RetailTransactionServiceProfile
+--Datos en HeadQuarters
+select * from  AxDB.dbo.RetailTransactionServiceProfile
 select * from AxDB.dbo.RetailChannelProfileProperty
-select * from AxDB.ax.RetailChannelProfileProperty
-select SERVICEHOSTURL,AZURERESOURCE, * from  AxDBOriginal.dbo.RetailTransactionServiceProfile
-select SERVICEHOSTURL,AZURERESOURCE, * from  AxDBOriginal.ax.RetailTransactionServiceProfile
+
+select * from  AxDBOriginal.dbo.RetailTransactionServiceProfile
 select * from AxDBOriginal.dbo.RetailChannelProfileProperty
-select * from AxDBOriginal.ax.RetailChannelProfileProperty
 select CONNECTIONSTRING, * from AxDBOriginal.dbo.RETAILCONNDATABASEPROFILE
+--------------------------------------------------------------------------------------------
+
+--Datos el ChannelDB
+--select SERVICEHOSTURL,AZURERESOURCE, * from  AxDB.ax.RetailTransactionServiceProfile
+--select * from AxDB.ax.RetailChannelProfileProperty
+--select SERVICEHOSTURL,AZURERESOURCE, * from  AxDBOriginal.ax.RetailTransactionServiceProfile
+--select * from AxDBOriginal.ax.RetailChannelProfileProperty
 */
