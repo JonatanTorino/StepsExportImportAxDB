@@ -46,7 +46,7 @@ PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 	
 ----------------------------------------------------------------------------------------------
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
-	declare @BackupToImport NVARCHAR(128) = 'AxDB_PreProd02_20220418.bak'
+	declare @BackupToImport NVARCHAR(128) = 'AxDB_PreProd02_20220429.bak'
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
 ----------------------------------------------------------------------------------------------
 
@@ -473,6 +473,7 @@ GO
 
 --<INICIO> HABILITO EL CHANGE TRACKING EN LA NUEVA DB
 BEGIN
+/*
 PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 
 	USE AxDB
@@ -513,4 +514,5 @@ PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 	--Enable again the change tracking on the database itself.
 	ALTER DATABASE AxDB SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 6 DAYS, AUTO_CLEANUP = ON)
 END
+*/
 GO

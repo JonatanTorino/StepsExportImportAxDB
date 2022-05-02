@@ -460,7 +460,7 @@ PRINT '--- <IMPORTO LA DB TRABAJADA COMO LA AxDB - Inicio> ---'
 	RESTORE DATABASE [AxDB] FROM DISK = @BackupToStageDB
 	WITH 
 		MOVE @LogicalNameData TO 'G:\MSSQL_DATA\AxDB.mdf',
-		MOVE @LogicalNameLog TO 'G:\MSSQL_DATA\AxDB_Log.ldf',
+		MOVE @LogicalNameLog  TO 'H:\MSSQL_LOGS\AxDB_Log.ldf',
 		FILE = 1, NOUNLOAD, REPLACE, STATS = 5
 END
 GO
