@@ -46,7 +46,7 @@ PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 	
 ----------------------------------------------------------------------------------------------
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
-	declare @BackupToImport NVARCHAR(128) = 'FBM-TEST01-B-1_AxDB_20220306_001910_PreProdImportada.bak'
+	declare @BackupToImport NVARCHAR(128) = 'AxDB_PreProd02_20220429.bak'
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
 ----------------------------------------------------------------------------------------------
 
@@ -106,6 +106,7 @@ PRINT '--- <CREO AxDBOriginal SI NO EXISTE - Inicio> ---'
 END
 GO
 
+/*
 --<INICIO> QUITO EL CHANGE TRACKING
 BEGIN
 PRINT '--- <QUITO EL CHANGE TRACKING - Inicio> ---'
@@ -158,6 +159,7 @@ PRINT '--- <QUITO EL CHANGE TRACKING - Inicio> ---'
 	AxDB
 	set CHANGE_TRACKING = OFF
 END
+*/
 GO
 
 --<INICIO> IMPORTAR LA DB EXTERNA
@@ -183,6 +185,7 @@ PRINT '--- <IMPORTAR LA DB EXTERNA - Inicio> ---'
 END
 GO
 
+/*
 --<INICIO> REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB
 BEGIN
 PRINT '--- <REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB - Inicio> ---'
@@ -234,6 +237,7 @@ PRINT '--- <REMUEVO Y REIMPORTO LOS USUARIOS DE LA DB - Inicio> ---'
 	CLOSE userCursor
 	DEALLOCATE userCursor
 END
+*/
 GO
 
 --<INICIO> CORRIJO LAS URLS Y OTRAS CONFIGURACIONES DE RETAIL
@@ -269,6 +273,7 @@ END
 GO
 
 --<INICIO> PREPARO LA DB IMPORTADA
+/*
 BEGIN
 PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	
@@ -385,6 +390,7 @@ PRINT '--- <PREPARO LA DB IMPORTADA - Inicio> ---'
 	-- Clear encrypted hardware profile merchand properties
 	update dbo.RETAILHARDWAREPROFILE set SECUREMERCHANTPROPERTIES = null where SECUREMERCHANTPROPERTIES is not null
 END
+*/
 GO
 
 --<INICIO> QUITO EL DUAL WRITE SETTINGS
@@ -460,19 +466,20 @@ PRINT '--- <IMPORTO LA DB TRABAJADA COMO LA AxDB - Inicio> ---'
 	RESTORE DATABASE [AxDB] FROM DISK = @BackupToStageDB
 	WITH 
 		MOVE @LogicalNameData TO 'G:\MSSQL_DATA\AxDB.mdf',
-		MOVE @LogicalNameLog  TO 'H:\MSSQL_LOGS\AxDB_Log.ldf',
+		MOVE @LogicalNameLog TO 'G:\MSSQL_DATA\AxDB_Log.ldf',
 		FILE = 1, NOUNLOAD, REPLACE, STATS = 5
 END
 GO
 
 --<INICIO> HABILITO EL CHANGE TRACKING EN LA NUEVA DB
 BEGIN
+/*
 PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 
 	USE AxDB
 	
 	--Enable again the change tracking on the database itself.
-	ALTER DATABASE AxDB SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 6 DAYS, AUTO_CLEANUP = ON)
+	--ALTER DATABASE AxDB SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 6 DAYS, AUTO_CLEANUP = ON)
 	
 	DROP PROCEDURE IF EXISTS SP_ConfigureTablesForChangeTracking
 	DROP PROCEDURE IF EXISTS SP_ConfigureTablesForChangeTracking_V2
@@ -503,5 +510,9 @@ PRINT '--- <HABILITO EL CHANGE TRACKING EN LA NUEVA DB - Inicio> ---'
 	CLOSE retail_ftx;  
 	DEALLOCATE retail_ftx; 
 	-- End Refresh Retail FullText Catalogs
+
+	--Enable again the change tracking on the database itself.
+	ALTER DATABASE AxDB SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 6 DAYS, AUTO_CLEANUP = ON)
 END
+*/
 GO
