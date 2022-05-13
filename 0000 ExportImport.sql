@@ -57,8 +57,8 @@ PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 	SELECT @LogicalName = LogicalName FROM #fileListTable
 
 
-	INSERT INTO #AxDB_BackupFiles SELECT 'BackupCurrentAxDB', @WorkFolder + HOST_NAME() + '_' + @dateTime + '_ExportImport_AxDBPrevStart.bak', ''
-	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToStageDB'	, @WorkFolder + HOST_NAME() + '_' + @dateTime + '_ExportImport_StagingAxDBImported.bak', ''
+	INSERT INTO #AxDB_BackupFiles SELECT 'BackupCurrentAxDB', @WorkFolder + HOST_NAME() + '_' + @dateTime + '_AxDB_PrevioEmpezarImportar.bak', ''
+	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToStageDB'	, @WorkFolder + HOST_NAME() + '_' + @dateTime + '_AxDBImported_StagingExportada.bak', ''
 	INSERT INTO #AxDB_BackupFiles SELECT 'BackupToImport', @WorkFolder + @BackupToImport, @LogicalName
 	
 	select * from #AxDB_BackupFiles 
