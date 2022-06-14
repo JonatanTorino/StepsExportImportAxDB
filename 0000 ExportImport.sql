@@ -46,7 +46,7 @@ PRINT '--- <INICIALIZACION VARIABLES - Inicio> ---'
 	
 ----------------------------------------------------------------------------------------------
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
-	declare @BackupToImport NVARCHAR(128) = 'FBM-TEST01-B-1_AxDB_20220306_001910_PreProdImportada.bak'
+	declare @BackupToImport NVARCHAR(128) = 'FBM TEST01 B 1_AxDB_20220516_172013_NuevaVersionParaB2.bak'
 	--<<<<<<<<CAMBIAR EL NOMBRE DEL ARCHIVO>>>>>>>>
 ----------------------------------------------------------------------------------------------
 
